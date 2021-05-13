@@ -1,0 +1,138 @@
+---
+title: "Hausaufgabe Nr.3"
+output: html_notebook
+---
+```{r}
+library(arules)
+library(arulesViz)
+library(tidyverse)
+library(tidyr)
+```
+
+
+```{r}
+all <- read_csv("C:/Users/julia/Desktop/Wahlpflicht-Data Science/all.csv")
+
+```
+
+<h4><b>Spielen Sie mit Confidence und Support-Werten. **Nach der Bereinigung der na´s und 0 werden zu den üblichen 15% Support und 1% Confidence nur noch 9 Regeln erstellt. Dadurch ist aber das Ergebnis viel aussagekräftiger und genauer. </b></h4>
+
+```{r}
+i <- split(all$'Book-Title', all$'User-ID')
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup=0.0015, conf=0.001, 
+                                              minlen=2, target="rules"))
+myRule <- as(basket_rules, "data.frame")
+hi <- head(basket_rules, by="lift", 100)
+head(myRule, 20)
+```
+<b>*1 Support-Wert 
+
+Veränderung des Support Wertes von 0.0015 auf 0.0040. Das heißt, dass wir sehen möchten, ob es Bücher in unserem Datensatz gibt, Kombination welcher >= in 40% der Fälle vorkommt. Wie man erkennen kann, sind solche Fälle nicht vorhanden, da es auch keine Regeln erstellt wurden.</b>
+
+```{r}
+i <- split(all$'Book-Title', all$'User-ID')
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup=0.0040, conf=0.001, 
+                                              minlen=2, target="rules"))
+myRule <- as(basket_rules, "data.frame")
+hi <- head(basket_rules, by="lift", 100)
+head(myRule, 20)
+```
+
+
+<b>*2 Confidence-Wert 
+Nun ist es interessant zu sehen, wie viel Prozent der User in 70 Prozent der Fälle jeweilige Bücherkombination bewertete. So, es ist zu sehen, dass es 3 Regeln erstellt wurden, das heißt es gibt 3 Kombinationen, wo die Nutzer in 70 Prozent der Fälle HP(Buch4), HP(Buch3) und HP(Buch 2) bewertet haben.
+</b>
+
+```{r}
+i <- split(all$'Book-Title', all$'User-ID')
+txn <- as(i, "transactions")
+basket_rules <- apriori(txn, parameter = list(sup=0.0015, conf=0.7, 
+                                              minlen=2, target="rules"))
+myRule <- as(basket_rules, "data.frame")
+hi <- head(basket_rules, by="lift", 100)
+head(myRule, 20)
+```
+
+
+
+<h4><b>Wir haben jetzt alle Bewertungen drin, ergibt das Sinn? + Lösung, wie das gelöst werden könnte</b></h4>
+
+<b>Antwort:</b> Meiner Meinung nach nicht, da es sehr viele Nutzer gibt die keine Bewertung abgegeben haben, bzw. es gibt sehr viele Bücher, bei welchen die meiste Bewertung auf 0 liegt. Ich würde zuerst alle 0 und na´s rausfiltern aus dem Datensatz, damit man den schön weiter analysieren könnte. 
+
+```{r}
+colnames(all)[colnames(all)=="Book-Rating"] <- "rating"
+
+
+all <- all %>% 
+  filter(rating!=0) %>% 
+  replace_na(list(rating="keine Angaben")) %>% 
+  filter(rating!="keine Angaben")
+```
+
+
+
+<h4><b>Erstellen Sie eine Analyse, bei der nicht die Bücher, sondern die Autoren in den Transaktionen enthalten sind</b></h4>
+
+
+```{r}
+a <- split(all$`Book-Author`, all$`User-ID`)
+action <- as(a, "transactions")
+rule <- apriori(action, parameter=list(supp=0.0015, conf=0.001, minlen=2, target="rules"))
+
+```
+```{r}
+rules <- as(rule, "data.frame")
+end <- head(rule, by="lift", 100)
+head(rules, 20)
+```
+<h4><b>Fällt Ihnen etwas in der Datenqualität auf?
+</b></h4>
+
+<b>Antwort:</b> Ja,mir ist aufgefallen, dass manche Autorennamen wegen ihrer unterschiedlichen Schreibweise, wie z.B. MICHAEL CRICHTON und Michael Crichton wie zwei verschiedene Units betrachtet werden. Das kann man durch reguläre Ausdrücke beheben. 
+
+Beheben könnte man das folgendermaßen (alle Buchstaben auf klein setzen und nach Authoren gruppieren): 
+
+```{r}
+all<- all %>% 
+  mutate('Book-Author'=str_to_lower(`Book-Author`)) %>% 
+  group_by(`Book-Author`)
+
+b <- split(all$`Book-Author`, all$'User-ID')
+txn2 <- as(b, "transactions")
+basket_rules2 <- apriori(txn2, parameter = list(sup=0.0015, conf=0.001, 
+                                              minlen=2, target="rules"))
+myRule2 <- as(basket_rules2, "data.frame")
+hi2 <- head(basket_rules2, by="lift", 100)
+head(myRule2, 20)
+```
+
+
+<h4><b>Wie kann man nun noch sicherstellen, dass nur die Autoren weiterempfohlen werden, deren Bücher man auch (mehrheitlich) gut fand?</b></h4>
+
+<b>Antwort:</b> Man könnte alle Bücher rausfiltern die über 5 bewertet wurden, nach Authoren gruppieren und anschließend die Analyse durchführen. 
+
+```{r}
+filtered <- all %>% 
+  filter(rating >4) %>% 
+  group_by(`Book-Author`)
+
+c <- split(filtered$`Book-Author`, filtered$'User-ID')
+txn3 <- as(c, "transactions")
+basket_rules3 <- apriori(txn3, parameter = list(sup=0.0015, conf=0.001, 
+                                              minlen=2, target="rules"))
+myRule3 <- as(basket_rules3, "data.frame")
+hi3 <- head(basket_rules3, by="lift", 100)
+head(myRule3, 20)
+```
+
+
+<h4><b>Welche anderen Features wären sinnvoll?</b></h4>
+
+
+<b>Antwort:</b> Sinnvoll wäre es noch nach dem Erscheinungsjahr zu filtern, so könnte man sehen, welche alte und neue Bücher die Nutzer bevorzugen und welche sie gut bewerten. <br>
+<br>* Außerdem wäre interessant zu sehen, welche Verläge die meisten Bücher haben, die die Nutzer bevorzugen und gut bewerten. So könnte man sehen, welche Verläge am erfolgreichsten sind. <br>
+<br>* Was auch noch interessant wäre, die Nutzer nach dem Geburtsjahr zu filtern, dann könnten wir sehen, Nutzer welchen Alters welche Bücher wie bewerten. 
+
+<br> In allen dieser Fälle könnte man noch mit den Support und Confidence-Werten spielen, so könnte man die Analyse aus verschiedenen Blickwinkeln betrachten, was sicherlich auch interessant wäre. 
