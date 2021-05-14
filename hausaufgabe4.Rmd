@@ -1,0 +1,126 @@
+---
+title: "HA 4"
+output: html_notebook
+---
+
+
+```{r}
+library(tidyverse)
+library(caret)
+library(e1071)
+library(pROC)
+```
+
+```{r}
+titanic <- read_delim("C:/Users/julia/Desktop/Wahlpflicht-Data Science/data/titanic.csv", 
+    ";", escape_double = FALSE, col_types = cols(age = col_double(), 
+        boat = col_double()), na = "NA", 
+    trim_ws = TRUE)
+titanic <- titanic %>% 
+  replace_na(list())
+```
+<b>Bitte erstellen Sie ein Notebook mit weiteren Features</b>
+
+* Würde ein Notebook mit siblings und Klasse erstellen und auch die surviver mit aufnehmen.
+
+<br>*Es wäre interessant zu untersuchen, welche Geschwister aus welcher Klasse sich retten konnten. <br>
+
+
+P.S.: ich habe das mit omit.na nicht gemacht, weil ich gesehen hatte, dass für meine Gegenstände der Untersuchung es nicht nötig gewesen wäre. Die Klasse, Geschwister und Überlebende-Kategorien sind ohne na´s im Datensatz vorhanden. 
+```{r}
+analyse <- titanic %>% 
+  select( survived,  sibsp, pclass) %>% 
+  na.omit() %>% 
+  mutate(survived=as.factor(survived))
+```
+
+```{r}
+train_control <- trainControl(method="cv", number=10, savePredictions = TRUE)
+set.seed(140)
+inTrain <- createDataPartition(
+  y = analyse$survived,
+  p = .8,
+  list = FALSE)
+training <- analyse[ inTrain,]
+testing  <- analyse[-inTrain,]
+
+```
+
+```{r}
+model.svm <- train(survived~., data=training, trControl=train_control, method="svmLinear")
+
+summary(model.svm) 
+pred <- predict(model.svm, testing[,-1], probability = FALSE) 
+```
+
+```{r}
+model.svm$pred
+
+```
+
+```{r}
+(test.results <- cbind(pred, testing))
+test.results <- test.results %>%
+  mutate(survived = as.numeric(survived)) %>%
+  mutate(pred = as.numeric(pred))
+
+```
+
+
+* Aus  folgendem Ergebnis kann gesagt werden, dass 136 Menschen richtig als Überlebende kategorisiert wurden und 25 nicht. Auf der anderen Seite wurden 65 Menschen als richtig tot erkannt, 35 dagegen nicht. In diesem Fall wäre  der Fehler mit 35 "überlebenden" Menschen, die in Wirklichkeit gestorben sind, schlimmer als der Fehler mit 25, die als tot erklärt wurden, in Wirklichkeit die Katastrophe aber überstanden haben. 
+```{r}
+table(test.results$pred, testing$survived)
+
+```
+* Auf der Graphik ist zu sehen, dass der AUC-Wert 0.65 ist, also kann gesagt werden, dass das System fast zufällig entschieden hat/entscheiden wird wer stirbt und wer überlebt, was nicht so weit von der Realität ist. 
+
+
+```{r}
+pROC_obj <- roc(test.results$survived, test.results$pred,
+            smoothed = TRUE,
+            ci=TRUE, ci.alpha=0.9, stratified=FALSE,
+            plot=TRUE, auc.polygon=TRUE, max.auc.polygon=TRUE, grid=TRUE,
+            print.auc=TRUE, show.thres=TRUE)
+```
+
+
+```{r}
+saveRDS(model.svm, "./titanic2.svm.rds")
+
+```
+
+* Nun ist es Zeit für Naive Bayes
+
+Innerhalb dieser Untersuchung wäre interessant zu sehen welche Wahrscheinlichkeit bestünde, wenn die Menschen mit der 1.Klasse etc. gefahren haben.  
+
+* Aus den Ergebnissen kann gesehen werden, dass es eine 35% Wahrscheinlichkeit bestünde in der ersten  Klasse die Katastrophe zu überstehen, eine 28% in der zweiten Klasse und dennoch eine 37% in der dritten. 
+
+```{r}
+training2<- testing %>% 
+  mutate(survived=as.factor(survived)) %>% 
+  mutate(pclass=as.factor(pclass))
+
+bayes <- naiveBayes(survived ~.,data=training2)
+bayes
+```
+
+```{r}
+wahr <- predict(bayes, training2 )
+table(wahr, training2$survived)
+
+```
+
+```{r}
+(erg <- cbind(wahr ,training2))
+```
+
+* Aus diesem Diagramm ist zu erkennen, dass das System doch fast zufällig entscheidet/entschieden hat wer überlebt und wer nicht. 
+
+
+```{r}
+
+erg <- erg %>% 
+  mutate(num =as.numeric(wahr))
+pROC_obj <- roc(as.numeric(as.factor(erg$survived)), erg$num, smoothed=T, ci=T, ci.alpha=0.7, stratified=F, plot=T, aus.polygon=T, max.auc.polygon=T, grid=T, print.auc=T, show.thres=T)
+```
+
