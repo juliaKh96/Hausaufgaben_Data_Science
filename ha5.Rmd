@@ -1,0 +1,188 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+<br>
+
+#### Versuchen Sie die Leser aus dem Buch-Datenset zu clustern: Welche Bücher gehören in welches Cluster?
+
+</br>
+
+<b>* Laden von libraries</b> 
+
+```{r}
+library(tidyverse)
+library(cluster)
+library(caret)
+```
+</br>
+
+<b>* Datensatz importieren </b> 
+
+```{r}
+all <- read_csv("C:/Users/julia/Desktop/Wahlpflicht-Data Science/Hausaufgaben_Data_Science/all3.csv", 
+    col_types = cols(Age = col_double()))
+```
+
+<b>* Im ersten Schritt wird die zugeordnete Klasse entfernt. 
+
+* Im zweiten wurden  Titel, Rating und User id  selektiert. 
+
+* Anschließend habe ich diese Spalten umbenannt, um damit besser arbeiten zu können (konnte davor die Spalten auch mit '' nicht ansprechen)</b>
+
+
+```{r}
+#zugeordnete Klasse wird entfernt. 
+
+all_sel = all[,-1] 
+
+#Titel, Rating und User id wurden selektiert; 
+#zudem habe ich diese Spalten umbenannt, um damit besser arbeiten zu können (konnte davor die Spalten auch mit '' nicht ansprechen)
+#und "NA´s" in der Spalte rating rausgefiltert.
+
+all_sel2 <- all_sel %>% 
+  select( 'Book-Title',  'Book-Rating', 'User-ID') %>% 
+  rename(rating='Book-Rating', title='Book-Title', id='User-ID') %>% 
+  replace_na(list(rating ="keine Angabe")) %>% 
+  filter(rating!="keine Angabe") %>% 
+  filter(rating>=9)
+```
+</br>
+
+* Zuerst habe ich die Bücher nach dem Titel gruppiert und dann berechnet wie viele Bewertungen das jeweilige Buch von den Nutzern erhalten hat. Anschließend filterte ich die Bücher raus, die weniger als 1500 Bewertungen erhielten. 
+```{r}
+#nun möchte ich nach der User id gruppieren, um zu wissen, wie viele Bewertungen ein einzelner User abgegeben hat. 
+
+all <- all_sel2 %>% 
+  group_by(id) %>% 
+  summarise(bew=n()) %>% 
+  filter(bew>=20) %>% 
+  unique()
+
+```
+
+
+<b>* Nachdem der Basis Cleaning gemacht wurde, kann man mit dem Clustering beginnen. </b>
+
+* zuerst wird eine neue Variable definiert (i=1). Damit wird gezeigt welcher User wie viele Bewertungen abgegeben hat. Z.B. bei einem User steht eine 1 bei 20 Bewertungen und überall sonst eine 0. So hat der User 20 Bewertungen abgegeben.  
+ 
+```{r}
+
+all<-all%>% 
+  mutate(i=1) %>% 
+  spread(id, i, fill=0)
+
+```
+
+
+* Zuerst habe ich bestimmt ,dass die Zahlen ausgeschrieben werden. 
+
+* Danach wurde ein Scree-Test durgeführt, um zu wissen, wie viele  k sinnvoll wären. 
+
+* Der Knick in der Kurve bedeutet, die Variabilität der Cluster.(In diesem Fall k= 2)
+```{r}
+options(scipen=999)
+
+
+wss <- (nrow(all)-1)*sum(apply(all,2,var))
+  for (i in 2:10) wss[i] <- sum(kmeans(all, centers=i)$withinss)
+
+
+plot(1:10, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+```
+* Nun wird Clustering mit k=2 versucht. 
+
+```{r}
+k.means.fit <- kmeans(all, 2) 
+
+```
+
+# Hier kriege ich bedauerlicherweise einen Fehler, den ich nicht lösen konnte. 
+
+Fehler: Fehler in princomp.default(x, scores = TRUE, cor = ncol(x) > 2) : 'princomp' can only be used with more units than variables
+
+```{r}
+#Hier kriege ich bedauerlicherweise einen Fehler, den ich nicht lösen konnte. 
+
+
+clusplot(all, k.means.fit$cluster, color=TRUE, shade=TRUE,
+labels=2, lines=0, main="K-means cluster plot")
+
+```
+
+* Hier wurde die euklidische Distanz berechnet
+
+```{r}
+(select4.dist <- dist(scale(all), method="euclidean"))
+
+```
+* Die erhaltenen Daten kann man in einem Plot gut visualisieren. 
+
+
+```{r}
+select4.hc <- hclust(select4.dist, method = "complete")
+plot(select4.hc)
+```
+
+
+
+
+*** Noch ein Versuch ein Cluster abzubilden, aber diesmal nicht mit id´s der Nutzer, sondern mit Titeln der Bücher. 
+
+```{r}
+
+all_sel3 <- all_sel %>% 
+  select( 'Book-Title',  'Book-Rating', 'User-ID') %>% 
+  rename(rating='Book-Rating', title='Book-Title', id='User-ID') %>% 
+  replace_na(list(rating ="keine Angabe")) %>% 
+  filter(rating!="keine Angabe") %>% 
+  filter(rating>=9)
+```
+
+```{r}
+all_sel3 <- all_sel3 %>% 
+  group_by(title) %>% 
+  summarise(bew=n()) %>% 
+  filter(bew>=1000) %>% 
+  unique()
+
+```
+
+
+
+```{r}
+all_<-all_sel3%>% 
+  mutate(i=1) %>% 
+  spread(title, i, fill=0)
+```
+
+```{r}
+wss <- (nrow(all_)-1)*sum(apply(all_,2,var))
+  for (i in 2:10) wss[i] <- sum(kmeans(all_, centers=i)$withinss)
+
+
+plot(1:10, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+```
+
+
+
+** Der Fehler ist, leider, immer noch da! :(
+```{r}
+k.means.fit2 <- kmeans(all_, 2) 
+
+clusplot(all_, k.means.fit2$cluster, color=TRUE, shade=TRUE,
+labels=2, lines=0, main="K-means cluster plot")
+```
+
+```{r}
+(select4.dist2 <- dist(scale(all_), method="euclidean"))
+
+```
+```{r}
+select4.hc2 <- hclust(select4.dist2, method = "complete")
+plot(select4.hc2)
+```
+
